@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard de Estadísticas</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; background: #1e1e1e; color: white; }
+    canvas { background: white; border-radius: 10px; margin-bottom: 40px; display: block; }
+  </style>
+</head>
+<body>
+  <h1>Dashboard de RPG Boss Fight</h1>
+
+  <h2 id="title-random">Random</h2>
+  <canvas id="chart-random" width="800" height="400"></canvas>
+
+  <h2 id="title-easy">Easy</h2>
+  <canvas id="chart-easy" width="800" height="400"></canvas>
+
+  <h2 id="title-hard">Hard</h2>
+  <canvas id="chart-hard" width="800" height="400"></canvas>
+
+  <h2 id="title-skills">Uso de Habilidades</h2>
+  <canvas id="chart-skills" width="800" height="400"></canvas>
+
+  <script type="module" src="./script.js"></script>
+</body>
+</html>
