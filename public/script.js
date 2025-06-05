@@ -1,6 +1,44 @@
 import { db } from "./firebase.js";
 import { ref, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
+
+const colorsByDifficulty = {
+    random: {
+      background: "rgba(138, 43, 226, 0.2)", // BlueViolet claro
+      border: "rgba(138, 43, 226, 1)",
+      point: "rgba(138, 43, 226, 1)",
+    },
+    easy: {
+      background: "rgba(34, 139, 34, 0.2)",  // ForestGreen claro
+      border: "rgba(34, 139, 34, 1)",
+      point: "rgba(34, 139, 34, 1)",
+    },
+    hard: {
+      background: "rgba(220, 20, 60, 0.2)",  // Crimson claro
+      border: "rgba(220, 20, 60, 1)",
+      point: "rgba(220, 20, 60, 1)",
+    },
+  };
+  const alternatingBackgrounds = [
+    "rgba(138, 43, 226, 0.2)",  // BlueViolet claro
+    "rgba(34, 139, 34, 0.2)",   // ForestGreen claro
+    "rgba(220, 20, 60, 0.2)",   // Crimson claro
+    "rgba(255, 165, 0, 0.2)",   // Orange claro
+    "rgba(70, 130, 180, 0.2)",  // SteelBlue claro
+    "rgba(255, 105, 180, 0.2)", // HotPink claro
+  ];
+  
+  const alternatingBorders = [
+    
+    "rgb(31, 26, 26)",
+  ];
+  
+  
+  
+  
+
+  
+
 async function getScores() {
   const snapshot = await get(ref(db, "scores"));
   if (!snapshot.exists()) return [];
@@ -10,28 +48,56 @@ async function getScores() {
   }));
 }
 
-function createChart(canvasId, title, labels, data) {
-  const ctx = document.getElementById(canvasId).getContext("2d");
-  return new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        label: title,
-        data,
-        backgroundColor: "rgba(75, 192, 192, 0.6)",
-        borderColor: "rgba(75, 192, 192, 1)",
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: true }
-      }
+
+// Función para mezclar un array (Fisher-Yates shuffle)
+function shuffleArray(array) {
+    const arr = array.slice(); // hacemos una copia para no modificar el original
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-  });
-}
+    return arr;
+  }
+  
+  function createChart(canvasId, title, labels, data, colors) {
+    const ctx = document.getElementById(canvasId).getContext("2d");
+  
+    // Mezclamos colores antes de asignar
+    const shuffledBackgrounds = shuffleArray(alternatingBackgrounds);
+    const shuffledBorders = shuffleArray(alternatingBorders);
+  
+    const backgroundColors = [];
+    const borderColors = [];
+  
+    for (let i = 0; i < data.length; i++) {
+      backgroundColors.push(shuffledBackgrounds[i % shuffledBackgrounds.length]);
+      borderColors.push(shuffledBorders[i % shuffledBorders.length]);
+    }
+  
+    return new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: title,
+          data,
+          backgroundColor: backgroundColors,
+          borderColor: borderColors,
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  }
+  
+
+  
+  
 
 getScores().then(scores => {
   const difficulties = ["random", "easy", "hard"];
@@ -80,7 +146,8 @@ getScores().then(scores => {
     document.getElementById(`title-${difficulty}`).textContent = titleText;
 
     // Creamos el gráfico
-    createChart(`chart-${difficulty}`, "Bosses derrotados", labels, data);
+    createChart(`chart-${difficulty}`, "Bosses derrotados", labels, data, colorsByDifficulty[difficulty]);
+
   });
 
   // ---- Gráfico de habilidades ----
@@ -100,12 +167,170 @@ getScores().then(scores => {
     });
   });
 
-  const skillLabels = Object.keys(skillCounts);
-  const skillData = skillLabels.map(skill => skillCounts[skill]);
+  const skillEntries = Object.entries(skillCounts);
+  skillEntries.sort((a, b) => b[1] - a[1]);
+
+  const skillLabels = skillEntries.map(([skill]) => skill);
+const skillData = skillEntries.map(([, count]) => count);
 
   if (skillLabels.length === 0) {
     document.getElementById("title-skills").textContent = "Uso de Habilidades (Sin datos)";
   } else {
-    createChart("chart-skills", "Cantidad de uso de habilidades", skillLabels, skillData);
+    createChart("chart-skills", "Cantidad de uso de habilidades", skillLabels, skillData, colorsByDifficulty.random);
+
   }
+
+
+  // 5to grafico
+
+  const statKeys = ["vida", "ataqueMelee", "ataqueRango", "defensa", "velocidad", "regenVida", "regenMana"];
+
+// Calculamos promedios de stats por dificultad
+const statsByDifficulty = {
+  random: { count: 0 },
+  easy: { count: 0 },
+  hard: { count: 0 },
+};
+
+for (const diff of Object.keys(statsByDifficulty)) {
+  statKeys.forEach(stat => {
+    statsByDifficulty[diff][stat] = 0;
+  });
+}
+
+scores.forEach(s => {
+  const diff = (s.difficulty || "").toLowerCase();
+  if (!statsByDifficulty[diff]) return; // ignorar otros valores
+
+  if (s.values) {
+    statsByDifficulty[diff].count++;
+    statKeys.forEach(stat => {
+      statsByDifficulty[diff][stat] += Number(s.values[stat]) || 0;
+    });
+  }
+});
+
+// Ahora calculamos el promedio
+for (const diff of Object.keys(statsByDifficulty)) {
+  if (statsByDifficulty[diff].count === 0) continue;
+  statKeys.forEach(stat => {
+    statsByDifficulty[diff][stat] /= statsByDifficulty[diff].count;
+  });
+}
+
+
+
+
+// Calculamos porcentajes para cada dificultad
+const percentageDatasets = Object.entries(statsByDifficulty).map(([diff, data]) => {
+    if (data.count === 0) return null;
+    
+    // Sumar valores de todos los stats para esta dificultad
+    const total = statKeys.reduce((sum, stat) => sum + (data[stat] || 0), 0);
+    if (total === 0) return null; // evitar división por cero
+  
+    // Calcular % por stat
+    const percentages = statKeys.map(stat => ((data[stat] || 0) / total) * 100);
+  
+    return {
+      label: diff.charAt(0).toUpperCase() + diff.slice(1),
+      data: percentages,
+      fill: true,
+      backgroundColor: colorsByDifficulty[diff].background,
+borderColor: colorsByDifficulty[diff].border,
+pointBackgroundColor: colorsByDifficulty[diff].point,
+
+      borderWidth: 2,
+    };
+  }).filter(Boolean);
+  
+  // Mostrar mensaje si no hay datos
+  if (percentageDatasets.length === 0) {
+    document.getElementById("title-stats-percent").textContent = "Distribución % de Stats (Sin datos)";
+  } else {
+    const ctxPercent = document.getElementById("chart-stats-percent").getContext("2d");
+    new Chart(ctxPercent, {
+      type: "radar",
+      data: {
+        labels: statKeys,
+        datasets: percentageDatasets,
+      },
+      options: {
+        responsive: true,
+        scales: {
+          r: {
+            beginAtZero: true,
+            max: 100,
+            ticks: { stepSize: 10 }
+          }
+        },
+        plugins: {
+          title: {
+            display: true,
+            text: "Distribución porcentual de Stats por Dificultad"
+          }
+        }
+      }
+    });
+  }
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Creamos datasets para radar chart
+const radarDatasets = Object.entries(statsByDifficulty).map(([diff, data]) => {
+    if (data.count === 0) return null; // omitimos si no hay datos
+    return {
+      label: diff.charAt(0).toUpperCase() + diff.slice(1),
+      data: statKeys.map(stat => data[stat]),
+      fill: true,
+      backgroundColor: colorsByDifficulty[diff].background,
+borderColor: colorsByDifficulty[diff].border,
+pointBackgroundColor: colorsByDifficulty[diff].point,
+
+      borderWidth: 2,
+    };
+  }).filter(Boolean);
+  
+
+// Si no hay datasets, ponemos mensaje en el título
+if (radarDatasets.length === 0) {
+  document.getElementById("title-stats").textContent = "Stats Promedio por Dificultad (Sin datos)";
+} else {
+  const ctxStats = document.getElementById("chart-stats").getContext("2d");
+  new Chart(ctxStats, {
+    type: "radar",
+    data: {
+      labels: statKeys,
+      datasets: radarDatasets,
+    },
+    options: {
+      responsive: true,
+      scales: {
+        r: {
+          beginAtZero: true,
+          suggestedMax: 100,
+          ticks: {
+            stepSize: 10
+          }
+        }
+      }
+    }
+  });
+}
+
+
+
 });
