@@ -29,15 +29,11 @@ const alternatingBackgrounds = [
 ];
 
 const alternatingBorders = [
-
   "rgb(31, 26, 26)",
 ];
 
-
-
-
-
-
+// Variable global para almacenar la referencia del gráfico del jugador
+let playerChart = null;
 
 async function getScores() {
   const snapshot = await get(ref(db, "scores"));
@@ -47,7 +43,6 @@ async function getScores() {
     key,
   }));
 }
-
 
 // Función para mezclar un array (Fisher-Yates shuffle)
 function shuffleArray(array) {
@@ -95,11 +90,18 @@ function createChart(canvasId, title, labels, data, colors) {
   });
 }
 
-
-
-
-
 getScores().then(scores => {
+  // Contar jugadores únicos
+  const uniquePlayers = new Set();
+  scores.forEach(s => {
+    const playerName = s.playerName || "Anónimo";
+    uniquePlayers.add(playerName.toLowerCase());
+  });
+  
+  // Actualizar el título principal
+  const mainTitle = document.querySelector('h1');
+  mainTitle.textContent = `Dashboard de RPG Boss Fight (${uniquePlayers.size} jugadores)`;
+
   const difficulties = ["random", "easy", "hard"];
 
   difficulties.forEach(difficulty => {
@@ -132,17 +134,28 @@ getScores().then(scores => {
       }
     });
 
-    const labels = Object.keys(bestByPlayer);
-    const data = labels.map(name => bestByPlayer[name]);
+    // Convertimos a array de objetos para poder ordenar
+    const playerArray = Object.entries(bestByPlayer).map(([name, defeated]) => ({
+      name,
+      defeated
+    }));
 
-    // Mejor jugador y promedio
-    const maxDefeated = Math.max(...data);
-    const indexMax = data.indexOf(maxDefeated);
-    const bestPlayer = labels[indexMax];
+    // Ordenamos de mayor a menor y tomamos solo los top 8
+    playerArray.sort((a, b) => b.defeated - a.defeated);
+    const top8 = playerArray.slice(0, 8);
+
+    const labels = top8.map(player => player.name);
+    const data = top8.map(player => player.defeated);
+
+    // Mejor jugador y promedio (usando todos los datos, no solo top 8)
+    const allData = Object.values(bestByPlayer);
+    const maxDefeated = Math.max(...allData);
+    const bestPlayerEntry = Object.entries(bestByPlayer).find(([name, defeated]) => defeated === maxDefeated);
+    const bestPlayer = bestPlayerEntry[0];
     const average = (totalDefeated / filtered.length).toFixed(2);
 
     // Actualizamos título con info extra
-    const titleText = `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} — Promedio: ${average}, Mejor: ${bestPlayer} (${maxDefeated})`;
+    const titleText = `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} (Top 8) — Promedio: ${average}, Mejor: ${bestPlayer} (${maxDefeated})`;
     document.getElementById(`title-${difficulty}`).textContent = titleText;
 
     // Creamos el gráfico
@@ -177,9 +190,7 @@ getScores().then(scores => {
     document.getElementById("title-skills").textContent = "Uso de Habilidades (Sin datos)";
   } else {
     createChart("chart-skills", "Cantidad de uso de habilidades", skillLabels, skillData, colorsByDifficulty.random);
-
   }
-
 
   // 5to grafico
 
@@ -218,9 +229,6 @@ getScores().then(scores => {
     });
   }
 
-
-
-
   // Calculamos porcentajes para cada dificultad
   const percentageDatasets = Object.entries(statsByDifficulty).map(([diff, data]) => {
     if (data.count === 0) return null;
@@ -239,7 +247,6 @@ getScores().then(scores => {
       backgroundColor: colorsByDifficulty[diff].background,
       borderColor: colorsByDifficulty[diff].border,
       pointBackgroundColor: colorsByDifficulty[diff].point,
-
       borderWidth: 2,
     };
   }).filter(Boolean);
@@ -274,21 +281,6 @@ getScores().then(scores => {
     });
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   // Creamos datasets para radar chart
   const radarDatasets = Object.entries(statsByDifficulty).map(([diff, data]) => {
     if (data.count === 0) return null; // omitimos si no hay datos
@@ -299,11 +291,9 @@ getScores().then(scores => {
       backgroundColor: colorsByDifficulty[diff].background,
       borderColor: colorsByDifficulty[diff].border,
       pointBackgroundColor: colorsByDifficulty[diff].point,
-
       borderWidth: 2,
     };
   }).filter(Boolean);
-
 
   // Si no hay datasets, ponemos mensaje en el título
   if (radarDatasets.length === 0) {
@@ -330,9 +320,6 @@ getScores().then(scores => {
       }
     });
   }
-
-
-
 
   // ---- Gráfico de Boss más difícil (el primero en la lista) ----
   const firstBossCounts = {};
@@ -363,97 +350,122 @@ getScores().then(scores => {
   }
 
   // --- Buscador por jugador ---
-document.getElementById("btn-search").addEventListener("click", () => {
-  const nameInput = document.getElementById("search-player").value.trim().toLowerCase();
-  const resultTitle = document.getElementById("player-result-title");
-  const canvas = document.getElementById("chart-player-values");
-  const ctx = canvas.getContext("2d");
+  document.getElementById("btn-search").addEventListener("click", () => {
+    const nameInput = document.getElementById("search-player").value.trim().toLowerCase();
+    const resultTitle = document.getElementById("player-result-title");
+    const canvas = document.getElementById("chart-player-values");
+    const ctx = canvas.getContext("2d");
 
-  if (!nameInput) {
-    resultTitle.textContent = "Ingresa un nombre válido.";
-    return;
-  }
-
-  // Filtrar registros que coincidan con el nombre del jugador
-  const playerRecords = scores.filter(s => (s.playerName || "").toLowerCase() === nameInput);
-
-  if (playerRecords.length === 0) {
-    resultTitle.textContent = `No se encontraron registros para "${nameInput}".`;
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // limpiar canvas
-    return;
-  }
-
-  // Verificamos en qué dificultades participó
-  const difficultiesPlayed = [...new Set(playerRecords.map(s => s.difficulty || "desconocido"))];
-
-  // Tomamos el promedio de sus valores (values)
-  const statKeys = ["vida", "ataqueMelee", "ataqueRango", "defensa", "velocidad", "regenVida", "regenMana"];
-  const totalStats = {};
-  statKeys.forEach(stat => totalStats[stat] = 0);
-  let count = 0;
-
-  playerRecords.forEach(s => {
-    if (s.values) {
-      statKeys.forEach(stat => {
-        totalStats[stat] += Number(s.values[stat]) || 0;
-      });
-      count++;
+    // DESTRUIR EL GRÁFICO ANTERIOR SI EXISTE
+    if (playerChart) {
+      playerChart.destroy();
+      playerChart = null;
     }
-  });
 
-  if (count === 0) {
-    resultTitle.textContent = `Jugador "${nameInput}" encontrado, pero sin valores registrados.`;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    return;
-  }
+    if (!nameInput) {
+      resultTitle.textContent = "Ingresa un nombre válido.";
+      return;
+    }
 
-  // Calcular promedio
-  statKeys.forEach(stat => {
-    totalStats[stat] /= count;
-  });
+    // Filtrar registros que coincidan con el nombre del jugador
+    const playerRecords = scores.filter(s => (s.playerName || "").toLowerCase() === nameInput);
 
-  // Calcular distribución en porcentaje
-  const totalSum = statKeys.reduce((sum, stat) => sum + totalStats[stat], 0);
-  const percentages = statKeys.map(stat => ((totalStats[stat] / totalSum) * 100).toFixed(2));
+    if (playerRecords.length === 0) {
+      resultTitle.textContent = `No se encontraron registros para "${nameInput}".`;
+      return;
+    }
 
-  resultTitle.textContent = `Jugador "${nameInput}" — Dificultades jugadas: ${difficultiesPlayed.join(", ")}`;
+    // Verificamos en qué dificultades participó
+    const difficultiesPlayed = [...new Set(playerRecords.map(s => s.difficulty || "desconocido"))];
 
-  // Crear gráfico tipo radar
-  new Chart(ctx, {
-    type: "radar",
-    data: {
-      labels: statKeys,
-      datasets: [{
-        label: `Distribución % de stats`,
-        data: percentages,
-        backgroundColor: "rgba(0, 191, 255, 0.2)", // DeepSkyBlue claro
-        borderColor: "rgba(0, 191, 255, 1)",
-        pointBackgroundColor: "rgba(0, 191, 255, 1)",
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        r: {
-          beginAtZero: true,
-          max: 100,
-          ticks: {
-            stepSize: 10,
-          }
+    resultTitle.textContent = `Jugador "${nameInput}" — Dificultades jugadas: ${difficultiesPlayed.join(", ")}`;
+
+    // Creamos datasets para cada dificultad jugada
+    const statKeys = ["vida", "ataqueMelee", "ataqueRango", "defensa", "velocidad", "regenVida", "regenMana"];
+    const datasets = [];
+
+    difficultiesPlayed.forEach(difficulty => {
+      // Filtrar registros solo para esta dificultad
+      const difficultyRecords = playerRecords.filter(s => (s.difficulty || "desconocido") === difficulty);
+      
+      // Calcular promedio de stats para esta dificultad
+      const totalStats = {};
+      statKeys.forEach(stat => totalStats[stat] = 0);
+      let count = 0;
+
+      difficultyRecords.forEach(s => {
+        if (s.values) {
+          statKeys.forEach(stat => {
+            totalStats[stat] += Number(s.values[stat]) || 0;
+          });
+          count++;
         }
-      },
-      plugins: {
-        title: {
-          display: true,
-          text: "Distribución porcentual de stats del jugador"
+      });
+
+      if (count > 0) {
+        // Calcular promedio
+        statKeys.forEach(stat => {
+          totalStats[stat] /= count;
+        });
+
+        // Calcular distribución en porcentaje
+        const totalSum = statKeys.reduce((sum, stat) => sum + totalStats[stat], 0);
+        if (totalSum > 0) {
+          const percentages = statKeys.map(stat => ((totalStats[stat] / totalSum) * 100));
+
+          // Obtener colores según la dificultad
+          const colors = colorsByDifficulty[difficulty.toLowerCase()] || {
+            background: "rgba(0, 191, 255, 0.2)",
+            border: "rgba(0, 191, 255, 1)",
+            point: "rgba(0, 191, 255, 1)"
+          };
+
+          datasets.push({
+            label: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} (${count} partidas)`,
+            data: percentages,
+            backgroundColor: colors.background,
+            borderColor: colors.border,
+            pointBackgroundColor: colors.point,
+            borderWidth: 2,
+          });
         }
       }
+    });
+
+    if (datasets.length === 0) {
+      resultTitle.textContent = `Jugador "${nameInput}" encontrado, pero sin valores registrados.`;
+      return;
     }
+
+    // CREAR EL NUEVO GRÁFICO CON MÚLTIPLES DATASETS
+    playerChart = new Chart(ctx, {
+      type: "radar",
+      data: {
+        labels: statKeys,
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        scales: {
+          r: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              stepSize: 10,
+            }
+          }
+        },
+        plugins: {
+          title: {
+            display: true,
+            text: "Distribución porcentual de stats por dificultad"
+          },
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        }
+      }
+    });
   });
-});
-
-
-
-
 });

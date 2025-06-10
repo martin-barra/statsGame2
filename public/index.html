@@ -7,39 +7,94 @@
   <style>
     body { font-family: sans-serif; padding: 2rem; background: #1e1e1e; color: white; }
     canvas { background: white; border-radius: 10px; margin-bottom: 40px; display: block; }
+    .chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-container {
+  background: #2a2a2a;
+  padding: 1rem;
+  border-radius: 10px;
+}
+
+canvas {
+  background: white;
+  border-radius: 10px;
+  width: 100% !important;
+  height: auto !important;
+}
+
+/* Opcional: mejorar visualización de inputs en modo oscuro */
+input, button {
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+  border-radius: 5px;
+  border: none;
+}
+
+input {
+  width: calc(100% - 1rem);
+}
+
   </style>
 </head>
 <body>
   <h1>Dashboard de RPG Boss Fight</h1>
 
-  <h2 id="title-random">Random</h2>
-  <canvas id="chart-random" width="800" height="400"></canvas>
-
-  <h2 id="title-easy">Easy</h2>
-  <canvas id="chart-easy" width="800" height="400"></canvas>
-
-  <h2 id="title-hard">Hard</h2>
-  <canvas id="chart-hard" width="800" height="400"></canvas>
-
-  <h2 id="title-skills">Uso de Habilidades</h2>
-  <canvas id="chart-skills" width="800" height="400"></canvas>
-
-  <h2 id="title-stats">Stats Promedio por Dificultad</h2>
-<canvas id="chart-stats" width="800" height="400"></canvas>
-
-<h3 id="title-stats-percent">Distribución % de Stats</h3>
-<canvas id="chart-stats-percent" width="400" height="400"></canvas>
-
-<h2 id="title-first-boss">Boss más difícil (primero en la lista)</h2>
-<canvas id="chart-first-boss" width="800" height="400"></canvas>
-
-<h2>Buscar jugador</h2>
-<input type="text" id="search-player" placeholder="Ingresa nombre del jugador" />
-<button id="btn-search">Buscar</button>
-
-<h3 id="player-result-title"></h3>
-<canvas id="chart-player-values" width="400" height="400"></canvas>
-
+  <div class="chart-grid">
+    <div class="chart-container">
+      <h2 id="title-random">Random</h2>
+      <canvas id="chart-random" width="800" height="400"></canvas>
+    </div>
+  
+    <div class="chart-container">
+      <h2 id="title-easy">Easy</h2>
+      <canvas id="chart-easy" width="800" height="400"></canvas>
+    </div>
+  
+    <div class="chart-container">
+      <h2 id="title-hard">Hard</h2>
+      <canvas id="chart-hard" width="800" height="400"></canvas>
+    </div>
+  
+    <div class="chart-container">
+      <h2 id="title-skills">Uso de Habilidades</h2>
+      <canvas id="chart-skills" width="800" height="400"></canvas>
+    </div>
+  
+    <div class="chart-container">
+      <h2 id="title-stats">Stats Promedio por Dificultad</h2>
+      <canvas id="chart-stats" width="800" height="400"></canvas>
+    </div>
+  
+    <div class="chart-container">
+      <h3 id="title-stats-percent">Distribución % de Stats</h3>
+      <canvas id="chart-stats-percent" width="400" height="400"></canvas>
+    </div>
+  
+    <div class="chart-container">
+      <h2 id="title-first-boss">Boss más difícil (primero en la lista)</h2>
+      <canvas id="chart-first-boss" width="800" height="400"></canvas>
+    </div>
+  
+    <div class="chart-container">
+      <h2>Buscar jugador</h2>
+      <input type="text" id="search-player" placeholder="Ingresa nombre del jugador" />
+      <button id="btn-search">Buscar</button>
+  
+      <h3 id="player-result-title"></h3>
+      <canvas id="chart-player-values" width="400" height="400"></canvas>
+    </div>
+  </div>
+  
 
   <script type="module" src="./script.js"></script>
 </body>
