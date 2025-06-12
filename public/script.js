@@ -1,52 +1,45 @@
 import { db } from "./firebase.js";
 import { ref, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-
 const colorsByDifficulty = {
   random: {
-    background: "rgba(138, 43, 226, 0.2)", // BlueViolet claro
+    background: "rgba(138, 43, 226, 0.2)",
     border: "rgba(138, 43, 226, 1)",
     point: "rgba(138, 43, 226, 1)",
   },
   easy: {
-    background: "rgba(34, 139, 34, 0.2)",  // ForestGreen claro
+    background: "rgba(34, 139, 34, 0.2)",
     border: "rgba(34, 139, 34, 1)",
     point: "rgba(34, 139, 34, 1)",
   },
   hard: {
-    background: "rgba(220, 20, 60, 0.2)",  // Crimson claro
+    background: "rgba(220, 20, 60, 0.2)",
     border: "rgba(220, 20, 60, 1)",
     point: "rgba(220, 20, 60, 1)",
   },
 };
+
 const alternatingBackgrounds = [
-  "rgba(138, 43, 226, 0.2)",  // BlueViolet claro
-  "rgba(34, 139, 34, 0.2)",   // ForestGreen claro
-  "rgba(220, 20, 60, 0.2)",   // Crimson claro
-  "rgba(255, 165, 0, 0.2)",   // Orange claro
-  "rgba(70, 130, 180, 0.2)",  // SteelBlue claro
-  "rgba(255, 105, 180, 0.2)", // HotPink claro
+  "rgba(138, 43, 226, 0.2)",
+  "rgba(34, 139, 34, 0.2)",
+  "rgba(220, 20, 60, 0.2)",
+  "rgba(255, 165, 0, 0.2)",
+  "rgba(70, 130, 180, 0.2)",
+  "rgba(255, 105, 180, 0.2)",
 ];
 
-const alternatingBorders = [
-  "rgb(31, 26, 26)",
-];
+const alternatingBorders = ["rgb(31, 26, 26)"];
 
-// Variable global para almacenar la referencia del gráfico del jugador
 let playerChart = null;
 
 async function getScores() {
   const snapshot = await get(ref(db, "scores"));
   if (!snapshot.exists()) return [];
-  return Object.entries(snapshot.val()).map(([key, value]) => ({
-    ...value,
-    key,
-  }));
+  return Object.entries(snapshot.val()).map(([key, value]) => ({ ...value, key }));
 }
 
-// Función para mezclar un array (Fisher-Yates shuffle)
 function shuffleArray(array) {
-  const arr = array.slice(); // hacemos una copia para no modificar el original
+  const arr = array.slice();
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -56,135 +49,81 @@ function shuffleArray(array) {
 
 function createChart(canvasId, title, labels, data, colors) {
   const ctx = document.getElementById(canvasId).getContext("2d");
-
-  // Mezclamos colores antes de asignar
-  const shuffledBackgrounds = shuffleArray(alternatingBackgrounds);
-  const shuffledBorders = shuffleArray(alternatingBorders);
-
-  const backgroundColors = [];
-  const borderColors = [];
-
-  for (let i = 0; i < data.length; i++) {
-    backgroundColors.push(shuffledBackgrounds[i % shuffledBackgrounds.length]);
-    borderColors.push(shuffledBorders[i % shuffledBorders.length]);
-  }
+  const bg = shuffleArray(alternatingBackgrounds);
+  const bd = shuffleArray(alternatingBorders);
+  const backgroundColors = data.map((_, i) => bg[i % bg.length]);
+  const borderColors = data.map((_, i) => bd[i % bd.length]);
 
   return new Chart(ctx, {
     type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        label: title,
-        data,
-        backgroundColor: backgroundColors,
-        borderColor: borderColors,
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: true }
-      }
-    }
+    data: { labels, datasets: [{ label: title, data, backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: 1 }] },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } },
   });
 }
 
 getScores().then(scores => {
-  // Contar jugadores únicos
-  const uniquePlayers = new Set();
-  scores.forEach(s => {
-    const playerName = s.playerName || "Anónimo";
-    uniquePlayers.add(playerName.toLowerCase());
-  });
-  
-  // Actualizar el título principal
-  const mainTitle = document.querySelector('h1');
-  mainTitle.textContent = `Dashboard de RPG Boss Fight (${uniquePlayers.size} jugadores)`;
+  // Título principal
+  const uniquePlayers = new Set(scores.map(s => (s.playerName || "Anónimo").toLowerCase()));
+  document.querySelector("h1").textContent = `Dashboard de RPG Boss Fight (${uniquePlayers.size} jugadores)`;
 
-  const difficulties = ["random", "easy", "hard"];
-
-  difficulties.forEach(difficulty => {
-    // Filtramos los scores por dificultad
+  // Gráficos por dificultad
+  ["random", "easy", "hard"].forEach(difficulty => {
     const filtered = scores.filter(s => (s.difficulty || "").toLowerCase() === difficulty);
-
     if (filtered.length === 0) {
-      // Si no hay datos, limpiamos título y gráfico
-      document.getElementById(`title-${difficulty}`).textContent = `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} (Sin datos)`;
+      document.getElementById(`title-${difficulty}`).textContent =
+        `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} (Sin datos)`;
       return;
     }
 
-    // Calculamos stats: mejor jugador, promedio bosses derrotados
-    const bestByPlayer = {};
     let totalDefeated = 0;
+    const bestByPlayer = {};
 
     filtered.forEach(s => {
-      const playerName = s.playerName || "Anónimo";
-      const bossesArr = Array.isArray(s.bosses)
+      const name = s.playerName || "Anónimo";
+      const bosses = Array.isArray(s.bosses)
         ? s.bosses
         : typeof s.bosses === "string"
           ? s.bosses.split(",").map(b => b.trim())
           : [];
-
-      const defeated = 50 - bossesArr.length;
+      const defeated = 50 - bosses.length;
       totalDefeated += defeated;
-
-      if (!bestByPlayer[playerName] || defeated > bestByPlayer[playerName]) {
-        bestByPlayer[playerName] = defeated;
-      }
+      if (!bestByPlayer[name] || defeated > bestByPlayer[name]) bestByPlayer[name] = defeated;
     });
 
-    // Convertimos a array de objetos para poder ordenar
-    const playerArray = Object.entries(bestByPlayer).map(([name, defeated]) => ({
-      name,
-      defeated
-    }));
+    const playerArray = Object.entries(bestByPlayer)
+      .map(([name, defeated]) => ({ name, defeated }))
+      .sort((a, b) => b.defeated - a.defeated)
+      .slice(0, 8);
 
-    // Ordenamos de mayor a menor y tomamos solo los top 8
-    playerArray.sort((a, b) => b.defeated - a.defeated);
-    const top8 = playerArray.slice(0, 8);
+    const labels = playerArray.map(p => p.name);
+    const data = playerArray.map(p => p.defeated);
 
-    const labels = top8.map(player => player.name);
-    const data = top8.map(player => player.defeated);
-
-    // Mejor jugador y promedio (usando todos los datos, no solo top 8)
-    const allData = Object.values(bestByPlayer);
-    const maxDefeated = Math.max(...allData);
-    const bestPlayerEntry = Object.entries(bestByPlayer).find(([name, defeated]) => defeated === maxDefeated);
-    const bestPlayer = bestPlayerEntry[0];
+    const maxDefeated = Math.max(...Object.values(bestByPlayer));
+    const bestPlayer = Object.entries(bestByPlayer).find(([, d]) => d === maxDefeated)[0];
     const average = (totalDefeated / filtered.length).toFixed(2);
 
-    // Actualizamos título con info extra
-    const titleText = `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} (Top 8) — Promedio: ${average}, Mejor: ${bestPlayer} (${maxDefeated})`;
-    document.getElementById(`title-${difficulty}`).textContent = titleText;
+    document.getElementById(`title-${difficulty}`).textContent =
+      `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} (Top 8) — Promedio: ${average}, Mejor: ${bestPlayer} (${maxDefeated})`;
 
-    // Creamos el gráfico
     createChart(`chart-${difficulty}`, "Bosses derrotados", labels, data, colorsByDifficulty[difficulty]);
-
   });
 
-  // ---- Gráfico de habilidades ----
-  // Contamos la frecuencia total de cada skill en todos los registros
+  // Gráfico de habilidades
   const skillCounts = {};
-
   scores.forEach(s => {
-    const skillsArr = Array.isArray(s.skills)
+    const skills = Array.isArray(s.skills)
       ? s.skills
       : typeof s.skills === "string"
-        ? s.skills.split(",").map(skill => skill.trim())
+        ? s.skills.split(",").map(x => x.trim())
         : [];
-
-    skillsArr.forEach(skill => {
-      if (!skill) return;
-      skillCounts[skill] = (skillCounts[skill] || 0) + 1;
+    skills.forEach(skill => {
+      if (skill) skillCounts[skill] = (skillCounts[skill] || 0) + 1;
     });
   });
 
-  const skillEntries = Object.entries(skillCounts);
-  skillEntries.sort((a, b) => b[1] - a[1]);
-
-  const skillLabels = skillEntries.map(([skill]) => skill);
-  const skillData = skillEntries.map(([, count]) => count);
+  const skillEntries = Object.entries(skillCounts).sort((a, b) => b[1] - a[1]);
+  const skillLabels = skillEntries.map(([s]) => s);
+  const skillData = skillEntries.map(([, c]) => c);
 
   if (skillLabels.length === 0) {
     document.getElementById("title-skills").textContent = "Uso de Habilidades (Sin datos)";
@@ -192,280 +131,224 @@ getScores().then(scores => {
     createChart("chart-skills", "Cantidad de uso de habilidades", skillLabels, skillData, colorsByDifficulty.random);
   }
 
-  // 5to grafico
-
+  // Estadísticas de stats y porcentajes globales
   const statKeys = ["vida", "ataqueMelee", "ataqueRango", "defensa", "velocidad", "regenVida", "regenMana"];
-
-  // Calculamos promedios de stats por dificultad
-  const statsByDifficulty = {
-    random: { count: 0 },
-    easy: { count: 0 },
-    hard: { count: 0 },
-  };
-
-  for (const diff of Object.keys(statsByDifficulty)) {
-    statKeys.forEach(stat => {
-      statsByDifficulty[diff][stat] = 0;
-    });
-  }
+  const statsByDifficulty = { random: { count: 0 }, easy: { count: 0 }, hard: { count: 0 } };
+  Object.values(statsByDifficulty).forEach(obj => statKeys.forEach(k => (obj[k] = 0)));
 
   scores.forEach(s => {
     const diff = (s.difficulty || "").toLowerCase();
-    if (!statsByDifficulty[diff]) return; // ignorar otros valores
-
-    if (s.values) {
-      statsByDifficulty[diff].count++;
-      statKeys.forEach(stat => {
-        statsByDifficulty[diff][stat] += Number(s.values[stat]) || 0;
-      });
-    }
+    if (!statsByDifficulty[diff] || !s.values) return;
+    statsByDifficulty[diff].count++;
+    statKeys.forEach(k => (statsByDifficulty[diff][k] += Number(s.values[k]) || 0));
   });
 
-  // Ahora calculamos el promedio
-  for (const diff of Object.keys(statsByDifficulty)) {
-    if (statsByDifficulty[diff].count === 0) continue;
-    statKeys.forEach(stat => {
-      statsByDifficulty[diff][stat] /= statsByDifficulty[diff].count;
-    });
-  }
+  Object.entries(statsByDifficulty).forEach(([diff, data]) => {
+    if (data.count > 0) statKeys.forEach(k => (data[k] /= data.count));
+  });
 
-  // Calculamos porcentajes para cada dificultad
-  const percentageDatasets = Object.entries(statsByDifficulty).map(([diff, data]) => {
-    if (data.count === 0) return null;
+  const percentageDatasets = Object.entries(statsByDifficulty)
+    .map(([diff, data]) => {
+      if (data.count === 0) return null;
+      const total = statKeys.reduce((sum, k) => sum + data[k], 0);
+      if (total === 0) return null;
+      return {
+        label: diff.charAt(0).toUpperCase() + diff.slice(1),
+        data: statKeys.map(k => (data[k] / total) * 100),
+        fill: true,
+        backgroundColor: colorsByDifficulty[diff].background,
+        borderColor: colorsByDifficulty[diff].border,
+        pointBackgroundColor: colorsByDifficulty[diff].point,
+        borderWidth: 2,
+      };
+    })
+    .filter(Boolean);
 
-    // Sumar valores de todos los stats para esta dificultad
-    const total = statKeys.reduce((sum, stat) => sum + (data[stat] || 0), 0);
-    if (total === 0) return null; // evitar división por cero
-
-    // Calcular % por stat
-    const percentages = statKeys.map(stat => ((data[stat] || 0) / total) * 100);
-
-    return {
-      label: diff.charAt(0).toUpperCase() + diff.slice(1),
-      data: percentages,
-      fill: true,
-      backgroundColor: colorsByDifficulty[diff].background,
-      borderColor: colorsByDifficulty[diff].border,
-      pointBackgroundColor: colorsByDifficulty[diff].point,
-      borderWidth: 2,
-    };
-  }).filter(Boolean);
-
-  // Mostrar mensaje si no hay datos
   if (percentageDatasets.length === 0) {
     document.getElementById("title-stats-percent").textContent = "Distribución % de Stats (Sin datos)";
   } else {
-    const ctxPercent = document.getElementById("chart-stats-percent").getContext("2d");
-    new Chart(ctxPercent, {
+    const allPerc = percentageDatasets.flatMap(ds => ds.data);
+    const maxPerc = Math.max(...allPerc);
+    const dynMax = Math.ceil(maxPerc + 10);
+    const step = Math.ceil(dynMax / 5);
+
+    new Chart(document.getElementById("chart-stats-percent"), {
       type: "radar",
-      data: {
-        labels: statKeys,
-        datasets: percentageDatasets,
-      },
+      data: { labels: statKeys, datasets: percentageDatasets },
       options: {
         responsive: true,
-        scales: {
-          r: {
-            beginAtZero: true,
-            max: 100,
-            ticks: { stepSize: 10 }
-          }
-        },
-        plugins: {
-          title: {
-            display: true,
-            text: "Distribución porcentual de Stats por Dificultad"
-          }
-        }
-      }
+        scales: { r: { beginAtZero: true, suggestedMax: dynMax, ticks: { stepSize: step } } },
+        plugins: { title: { display: true, text: "Distribución porcentual de Stats por Dificultad" } },
+      },
     });
   }
 
-  // Creamos datasets para radar chart
-  const radarDatasets = Object.entries(statsByDifficulty).map(([diff, data]) => {
-    if (data.count === 0) return null; // omitimos si no hay datos
-    return {
-      label: diff.charAt(0).toUpperCase() + diff.slice(1),
-      data: statKeys.map(stat => data[stat]),
-      fill: true,
-      backgroundColor: colorsByDifficulty[diff].background,
-      borderColor: colorsByDifficulty[diff].border,
-      pointBackgroundColor: colorsByDifficulty[diff].point,
-      borderWidth: 2,
-    };
-  }).filter(Boolean);
+  // Gráfico “Stats promedio por dificultad”
+  const radarDatasets = Object.entries(statsByDifficulty)
+    .map(([diff, data]) => {
+      if (data.count === 0) return null;
+      return {
+        label: diff.charAt(0).toUpperCase() + diff.slice(1),
+        data: statKeys.map(k => data[k]),
+        fill: true,
+        backgroundColor: colorsByDifficulty[diff].background,
+        borderColor: colorsByDifficulty[diff].border,
+        pointBackgroundColor: colorsByDifficulty[diff].point,
+        borderWidth: 2,
+      };
+    })
+    .filter(Boolean);
 
-  // Si no hay datasets, ponemos mensaje en el título
   if (radarDatasets.length === 0) {
     document.getElementById("title-stats").textContent = "Stats Promedio por Dificultad (Sin datos)";
   } else {
-    const ctxStats = document.getElementById("chart-stats").getContext("2d");
-    new Chart(ctxStats, {
+    new Chart(document.getElementById("chart-stats"), {
       type: "radar",
-      data: {
-        labels: statKeys,
-        datasets: radarDatasets,
-      },
+      data: { labels: statKeys, datasets: radarDatasets },
       options: {
         responsive: true,
         scales: {
           r: {
             beginAtZero: true,
-            suggestedMax: 100,
-            ticks: {
-              stepSize: 10
-            }
-          }
-        }
-      }
+            suggestedMax: Math.ceil(Math.max(...radarDatasets.flatMap(ds => ds.data)) + 10),
+            ticks: { stepSize: Math.ceil((Math.max(...radarDatasets.flatMap(ds => ds.data)) + 10) / 5) },
+          },
+        },
+        plugins: { title: { display: true, text: "Stats promedio por dificultad" } },
+      },
     });
   }
 
-  // ---- Gráfico de Boss más difícil (el primero en la lista) ----
+  // Gráfico de “Boss con el que perdiste”
   const firstBossCounts = {};
-
   scores.forEach(s => {
-    const bossesArr = Array.isArray(s.bosses)
+    const bosses = Array.isArray(s.bosses)
       ? s.bosses
       : typeof s.bosses === "string"
         ? s.bosses.split(",").map(b => b.trim())
         : [];
-
-    const firstBoss = bossesArr[0];
-    if (!firstBoss) return;
-
-    firstBossCounts[firstBoss] = (firstBossCounts[firstBoss] || 0) + 1;
+    const boss = bosses[0];
+    if (boss) firstBossCounts[boss] = (firstBossCounts[boss] || 0) + 1;
   });
 
-  const firstBossEntries = Object.entries(firstBossCounts);
-  firstBossEntries.sort((a, b) => b[1] - a[1]);
-
-  const firstBossLabels = firstBossEntries.map(([boss]) => boss);
-  const firstBossData = firstBossEntries.map(([, count]) => count);
-
-  if (firstBossLabels.length === 0) {
+  const bossEntries = Object.entries(firstBossCounts).sort((a, b) => b[1] - a[1]);
+  if (bossEntries.length === 0) {
     document.getElementById("title-first-boss").textContent = "Boss más difícil (Sin datos)";
   } else {
-    createChart("chart-first-boss", "Boss con el que perdiste", firstBossLabels, firstBossData, colorsByDifficulty.hard);
+    createChart(
+      "chart-first-boss",
+      "Boss con el que perdiste",
+      bossEntries.map(([b]) => b),
+      bossEntries.map(([, c]) => c),
+      colorsByDifficulty.hard
+    );
   }
 
-  // --- Buscador por jugador ---
-  document.getElementById("btn-search").addEventListener("click", () => {
-    const nameInput = document.getElementById("search-player").value.trim().toLowerCase();
-    const resultTitle = document.getElementById("player-result-title");
-    const canvas = document.getElementById("chart-player-values");
-    const ctx = canvas.getContext("2d");
-
-    // DESTRUIR EL GRÁFICO ANTERIOR SI EXISTE
-    if (playerChart) {
-      playerChart.destroy();
-      playerChart = null;
-    }
-
-    if (!nameInput) {
-      resultTitle.textContent = "Ingresa un nombre válido.";
-      return;
-    }
-
-    // Filtrar registros que coincidan con el nombre del jugador
-    const playerRecords = scores.filter(s => (s.playerName || "").toLowerCase() === nameInput);
-
-    if (playerRecords.length === 0) {
-      resultTitle.textContent = `No se encontraron registros para "${nameInput}".`;
-      return;
-    }
-
-    // Verificamos en qué dificultades participó
-    const difficultiesPlayed = [...new Set(playerRecords.map(s => s.difficulty || "desconocido"))];
-
-    resultTitle.textContent = `Jugador "${nameInput}" — Dificultades jugadas: ${difficultiesPlayed.join(", ")}`;
-
-    // Creamos datasets para cada dificultad jugada
-    const statKeys = ["vida", "ataqueMelee", "ataqueRango", "defensa", "velocidad", "regenVida", "regenMana"];
-    const datasets = [];
-
-    difficultiesPlayed.forEach(difficulty => {
-      // Filtrar registros solo para esta dificultad
-      const difficultyRecords = playerRecords.filter(s => (s.difficulty || "desconocido") === difficulty);
-      
-      // Calcular promedio de stats para esta dificultad
-      const totalStats = {};
-      statKeys.forEach(stat => totalStats[stat] = 0);
-      let count = 0;
-
-      difficultyRecords.forEach(s => {
-        if (s.values) {
-          statKeys.forEach(stat => {
-            totalStats[stat] += Number(s.values[stat]) || 0;
-          });
-          count++;
-        }
-      });
-
-      if (count > 0) {
-        // Calcular promedio
-        statKeys.forEach(stat => {
-          totalStats[stat] /= count;
-        });
-
-        // Calcular distribución en porcentaje
-        const totalSum = statKeys.reduce((sum, stat) => sum + totalStats[stat], 0);
-        if (totalSum > 0) {
-          const percentages = statKeys.map(stat => ((totalStats[stat] / totalSum) * 100));
-
-          // Obtener colores según la dificultad
-          const colors = colorsByDifficulty[difficulty.toLowerCase()] || {
-            background: "rgba(0, 191, 255, 0.2)",
-            border: "rgba(0, 191, 255, 1)",
-            point: "rgba(0, 191, 255, 1)"
-          };
-
-          datasets.push({
-            label: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} (${count} partidas)`,
-            data: percentages,
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-            pointBackgroundColor: colors.point,
-            borderWidth: 2,
-          });
-        }
+  // Buscador por jugador
+    // --- Buscador por jugador ---
+    document.getElementById("btn-search").addEventListener("click", () => {
+      const nameInput = document.getElementById("search-player").value.trim().toLowerCase();
+      const resultTitle = document.getElementById("player-result-title");
+      const ctx = document.getElementById("chart-player-values").getContext("2d");
+  
+      // Si ya existe un chart previo, lo destruyo
+      if (playerChart) {
+        playerChart.destroy();
+        playerChart = null;
       }
-    });
-
-    if (datasets.length === 0) {
-      resultTitle.textContent = `Jugador "${nameInput}" encontrado, pero sin valores registrados.`;
-      return;
-    }
-
-    // CREAR EL NUEVO GRÁFICO CON MÚLTIPLES DATASETS
-    playerChart = new Chart(ctx, {
-      type: "radar",
-      data: {
-        labels: statKeys,
-        datasets: datasets
-      },
-      options: {
-        responsive: true,
-        scales: {
-          r: {
-            beginAtZero: true,
-            max: 100,
-            ticks: {
-              stepSize: 10,
+  
+      if (!nameInput) {
+        resultTitle.textContent = "Ingresa un nombre válido.";
+        return;
+      }
+  
+      // Filtro registros del jugador
+      const playerRecords = scores.filter(s => (s.playerName || "").toLowerCase() === nameInput);
+      if (playerRecords.length === 0) {
+        resultTitle.textContent = `No se encontraron registros para "${nameInput}".`;
+        return;
+      }
+  
+      // Dificultades jugadas
+      const difficultiesPlayed = [...new Set(playerRecords.map(s => s.difficulty || "desconocido"))];
+      resultTitle.textContent = `Jugador "${nameInput}" — Dificultades jugadas: ${difficultiesPlayed.join(", ")}`;
+  
+      const statKeys = ["vida", "ataqueMelee", "ataqueRango", "defensa", "velocidad", "regenVida", "regenMana"];
+      const datasets = [];
+  
+      // Para cada dificultad, calculo promedios y transformo a %    
+      difficultiesPlayed.forEach(difficulty => {
+        const recs = playerRecords.filter(s => (s.difficulty || "desconocido") === difficulty && s.values);
+        if (recs.length === 0) return;
+  
+        // Sumo valores
+        const totals = statKeys.reduce((acc, k) => ({ ...acc, [k]: 0 }), {});
+        recs.forEach(s => statKeys.forEach(k => totals[k] += Number(s.values[k]) || 0));
+        // Promedio
+        statKeys.forEach(k => (totals[k] /= recs.length));
+        const sum = statKeys.reduce((sum, k) => sum + totals[k], 0);
+        if (sum === 0) return;
+  
+        // Paso a %
+        const perc = statKeys.map(k => (totals[k] / sum) * 100);
+        const c = colorsByDifficulty[difficulty] || {
+          background: "rgba(0, 191, 255, 0.2)",
+          border: "rgba(0, 191, 255, 1)",
+          point:  "rgba(0, 191, 255, 1)"
+        };
+  
+        datasets.push({
+          label: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} (${recs.length} partidas)`,
+          data: perc,
+          fill: true,
+          backgroundColor: c.background,
+          borderColor: c.border,
+          pointBackgroundColor: c.point,
+          borderWidth: 2
+        });
+      });
+  
+      if (datasets.length === 0) {
+        resultTitle.textContent = `Jugador "${nameInput}" encontrado, pero sin valores registrados.`;
+        return;
+      }
+  
+      // Calculo dinámico del max y step
+      const allValues = datasets.flatMap(ds => ds.data);
+      const maxVal = Math.max(...allValues);
+      const dynamicMax = Math.ceil(maxVal + 10);
+      const stepSize = Math.ceil(dynamicMax / 5);
+  
+      // Creo el radar chart para el jugador
+      playerChart = new Chart(ctx, {
+        type: "radar",
+        data: {
+          labels: statKeys,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          scales: {
+            r: {
+              beginAtZero: true,
+              suggestedMax: dynamicMax,
+              ticks: { stepSize: stepSize }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: "Distribución porcentual de stats por dificultad"
+            },
+            legend: {
+              display: true,
+              position: "top"
             }
           }
-        },
-        plugins: {
-          title: {
-            display: true,
-            text: "Distribución porcentual de stats por dificultad"
-          },
-          legend: {
-            display: true,
-            position: 'top'
-          }
         }
-      }
-    });
-  });
-});
+      });
+    });  // ← cierre del addEventListener
+  
+  }); // ← cierre definitivo de getScores().then(...)
+  
+// ← Cierre definitivo de getScores().then(...)
