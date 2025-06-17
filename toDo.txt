@@ -4,3 +4,7 @@
 
 [✅]que salgan los nombres de los bosses
 (x)que salgan los nombres de las habilidades
+
+
+[x] arreglar eso de la vista de celular
+[x] video de yt
