@@ -1,6 +1,6 @@
-que funcione al presionar enter el buscador
-que salga cuantos bosses derrotó en cada una de las dificultades que jugó
-que salga 'partida' sin la 's'
+[✅] que funcione al presionar enter el buscador
+[✅]que salga cuantos bosses derrotó en cada una de las dificultades que jugó
+[✅]que salga 'partida' sin la 's'
 
-que salgan los nombres de los bosses
-que salgan los nombres de las habilidades
+[✅]que salgan los nombres de los bosses
+(x)que salgan los nombres de las habilidades
