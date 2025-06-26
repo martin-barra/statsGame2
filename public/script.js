@@ -3,9 +3,11 @@ import { ref, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-da
 
 const bossNames = {
   "1": "Worm",
+  "2": "Mage",
   "3": "Knight",
   "4": "Demon",
   "5": "Minotaur",
+  "6":"The Death",
 };
 
 const colorsByDifficulty = {
@@ -410,6 +412,54 @@ summaryEl.textContent = `\n${bossSummary}`;
     }
   });
 
-}); // ← cierre definitivo de getScores().then(...)
+  // Gráficos de Cartas Seleccionadas
+const normalCardCounts = {};
+const specialCardCounts = {};
 
-// ← Cierre definitivo de getScores().then(...)
+scores.forEach(s => {
+  const cards = Array.isArray(s.selectedCards)
+    ? s.selectedCards
+    : typeof s.selectedCards === "string"
+      ? s.selectedCards.split(",").map(n => parseInt(n.trim()))
+      : [];
+
+  cards.forEach(n => {
+    if (n >= 1 && n <= 10) {
+      normalCardCounts[n] = (normalCardCounts[n] || 0) + 1;
+    } else if (n >= 101 && n <= 110) {
+      specialCardCounts[n] = (specialCardCounts[n] || 0) + 1;
+    }
+  });
+});
+
+// Cartas Normales
+const normalEntries = Object.entries(normalCardCounts).sort((a, b) => a[0] - b[0]);
+const normalLabels = normalEntries.map(([id]) => `Carta ${id}`);
+const normalData = normalEntries.map(([, count]) => count);
+
+if (normalLabels.length === 0) {
+  document.getElementById("title-cards-normal").textContent = "Cartas Normales (Sin datos)";
+} else {
+  createChart("chart-cards-normal", "Cartas Normales más usadas", normalLabels, normalData, colorsByDifficulty.easy);
+}
+
+// Cartas Especiales
+const specialEntries = Object.entries(specialCardCounts).sort((a, b) => a[0] - b[0]);
+const specialLabels = specialEntries.map(([id]) => `Carta ${id}`);
+const specialData = specialEntries.map(([, count]) => count);
+
+if (specialLabels.length === 0) {
+  document.getElementById("title-cards-special").textContent = "Cartas Especiales (Sin datos)";
+} else {
+  createChart("chart-cards-special", "Cartas Especiales más usadas", specialLabels, specialData, colorsByDifficulty.random);
+}
+
+
+
+
+
+
+
+
+
+}); 
